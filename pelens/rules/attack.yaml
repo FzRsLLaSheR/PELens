@@ -1,0 +1,128 @@
+# Mapping of the PELens rules to MITRE ATT&CK (Enterprise) techniques.
+# Names follow the current ATT&CK version; the official reference is https://attack.mitre.org/techniques/<ID>
+techniques:
+  T1016: "System Network Configuration Discovery"
+  T1027: "Obfuscated Files or Information"
+  T1027.001: "Obfuscated Files or Information: Binary Padding"
+  T1027.002: "Obfuscated Files or Information: Software Packing"
+  T1027.003: "Obfuscated Files or Information: Steganography"
+  T1027.007: "Obfuscated Files or Information: Dynamic API Resolution"
+  T1027.009: "Obfuscated Files or Information: Embedded Payloads"
+  T1027.013: "Obfuscated Files or Information: Encrypted/Encoded File"
+  T1036.001: "Masquerading: Invalid Code Signature"
+  T1041: "Exfiltration Over C2 Channel"
+  T1055: "Process Injection"
+  T1056.001: "Input Capture: Keylogging"
+  T1057: "Process Discovery"
+  T1059: "Command and Scripting Interpreter"
+  T1070.004: "Indicator Removal: File Deletion"
+  T1071.001: "Application Layer Protocol: Web Protocols"
+  T1102.001: "Web Service: Dead Drop Resolver"
+  T1105: "Ingress Tool Transfer"
+  T1106: "Native API"
+  T1113: "Screen Capture"
+  T1140: "Deobfuscate/Decode Files or Information"
+  T1486: "Data Encrypted for Impact"
+  T1497.001: "Virtualization/Sandbox Evasion: System Checks"
+  T1497.003: "Virtualization/Sandbox Evasion: Time Based Checks"
+  T1543.003: "Create or Modify System Process: Windows Service"
+  T1547.001: "Boot or Logon Autostart Execution: Registry Run Keys / Startup Folder"
+  T1539: "Steal Web Session Cookie"
+  T1553.002: "Subvert Trust Controls: Code Signing"
+  T1555: "Credentials from Password Stores"
+  T1555.003: "Credentials from Password Stores: Credentials from Web Browsers"
+  T1564.003: "Hide Artifacts: Hidden Window"
+  T1562.001: "Impair Defenses: Disable or Modify Tools"
+  T1562.006: "Impair Defenses: Indicator Blocking"
+  T1574.001: "Hijack Execution Flow: DLL"
+  T1620: "Reflective Code Loading"
+  T1622: "Debugger Evasion"
+
+# rule id -> techniques
+rules:
+  rwx_section: [T1027.002]
+  exec_data_section: [T1027.002]
+  multiple_exec_sections: [T1027.002]
+  high_entropy_exec: [T1027.002]
+  high_entropy_section: [T1027.002]
+  virtual_only_section: [T1027.002]
+  known_packer: [T1027.002]
+  obfuscated_code: [T1027]
+  packer_section_names: [T1027.002]
+  weird_section_names: [T1027.002]
+  ep_outside_sections: [T1027.002]
+  ep_not_executable: [T1027.002]
+  ep_last_section: [T1027.002]
+  no_imports: [T1027.002]
+  few_imports: [T1027.002]
+  high_file_entropy: [T1027.002]
+  dynamic_resolution: [T1027.007]
+  api_injection: [T1055]
+  api_antidebug: [T1622]
+  api_keylogger: [T1056.001]
+  keyboard_hook: [T1056.001]
+  api_persistence: [T1543.003]
+  api_network: [T1071.001]
+  embedded_pe: [T1027.009]
+  hidden_encrypted_pe: [T1027.009, T1027.013]
+  embedded_pe_in_section: [T1027.009]
+  large_overlay: [T1027.001]
+  high_entropy_overlay: [T1027.013]
+  high_entropy_resource: [T1027.013]
+  hidden_strings: [T1027]
+  hidden_iocs: [T1027]
+  static_shell: [T1059]
+  static_autorun: [T1547.001]
+  static_antianalysis: [T1497.001]
+  static_ransom: [T1486]
+  dead_drop: [T1102.001]
+  ip_url: [T1071.001]
+  ip_lookup: [T1016]
+  stealer_targets: [T1555.003]
+  sandbox_checks: [T1497.001]
+  sideload_name: [T1574.001]
+  proxy_dll: [T1574.001]
+  manual_export_parsing: [T1027.007]
+  api_hashing: [T1027.007]
+  direct_syscalls: [T1106]
+  rwx_allocation: [T1620]
+  timing_checks: [T1497.003]
+  dotnet_packed_loader: [T1620, T1027.002]
+  dotnet_in_memory_loading: [T1620]
+  dotnet_shellcode_runner: [T1620]
+  dotnet_injection: [T1055]
+  dotnet_amsi_etw: [T1562.001, T1562.006]
+  dotnet_credential_theft: [T1555]
+  dotnet_download_execute: [T1105]
+  dotnet_spying: [T1113, T1056.001]
+  dotnet_exfiltration: [T1041]
+  dotnet_anti_debug: [T1622]
+  dotnet_persistence: [T1547.001]
+  dotnet_metadata_tampering: [T1027]
+  dotnet_encrypted_strings: [T1027.013]
+  dotnet_native_pointers: [T1106]
+  dotnet_obfuscator: [T1027]
+  dotnet_obfuscated_names: [T1027]
+  dotnet_resource_payload: [T1027.009]
+  dotnet_stego_payload: [T1027.003, T1027.009]
+  dotnet_stego_decoder: [T1027.003, T1140]
+  stream_cipher: [T1140]
+  payload_decryption: [T1140, T1027.013]
+  large_encrypted_blob: [T1027.013]
+  xor_decryption: [T1140]
+  handmade_crypto: [T1140]
+  custom_base64: [T1140]
+  aplib_decompressor: [T1140, T1027.002]
+  ransomware_profile: [T1486]
+  dotnet_string_decryptor: [T1140, T1027.013]
+  runtime_api_resolution: [T1027.007]
+  dropper_profile: [T1027.009, T1106]
+  trojanized_library: [T1574.001]
+  process_memory_reading: [T1057]
+  hidden_desktop: [T1564.003]
+  self_deletion: [T1070.004]
+  browser_abuse: [T1539]
+  code_patterns: [T1057]
+  signature_mismatch: [T1036.001]
+  signature_invalid: [T1036.001]
+  signature_untrusted: [T1036.001]

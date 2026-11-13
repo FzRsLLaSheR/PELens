@@ -1,0 +1,130 @@
+# .NET analysis signatures for PELens.
+#
+# api_categories: groups of .NET methods (Namespace.Type::Method, matched on the MemberRef table) and
+#   P/Invoke imports (native API names, matched on the ImplMap table). A category "hits" when at least
+#   `min` distinct entries are referenced by the assembly.
+# obfuscators: regular expressions matched on type, method, attribute, resource and module names and on
+#   the user strings (#US). One match is enough to name the obfuscator/packer.
+
+api_categories:
+  in_memory_loading:
+    title: "In-memory assembly loading"
+    min: 1
+    methods: [System.Reflection.Assembly::Load, System.Reflection.Assembly::LoadFrom, System.AppDomain::Load,
+              System.Reflection.Assembly::UnsafeLoadFrom, System.Runtime.Loader.AssemblyLoadContext::LoadFromStream]
+  reflection_invoke:
+    title: "Reflection invocation"
+    min: 1
+    methods: [System.Reflection.MethodBase::Invoke, System.Reflection.MethodInfo::Invoke, System.Type::InvokeMember,
+              System.Reflection.Assembly::get_EntryPoint, System.Activator::CreateInstance,
+              System.Delegate::DynamicInvoke]
+  native_function_pointer:
+    title: "Calls native code through function pointers"
+    min: 1
+    methods: [System.Runtime.InteropServices.Marshal::GetDelegateForFunctionPointer,
+              System.Runtime.InteropServices.Marshal::GetFunctionPointerForDelegate]
+    pinvoke: [GetProcAddress, LoadLibrary, LoadLibraryA, LoadLibraryW]
+  decryption:
+    title: "Symmetric decryption"
+    min: 1
+    methods: [System.Security.Cryptography.SymmetricAlgorithm::CreateDecryptor, System.Security.Cryptography.Aes::Create,
+              System.Security.Cryptography.RijndaelManaged::.ctor, System.Security.Cryptography.AesCryptoServiceProvider::.ctor,
+              System.Security.Cryptography.TripleDESCryptoServiceProvider::.ctor, System.Security.Cryptography.DESCryptoServiceProvider::.ctor,
+              System.Security.Cryptography.RC2CryptoServiceProvider::.ctor, System.Security.Cryptography.Rijndael::Create,
+              System.Security.Cryptography.AesManaged::.ctor]
+  decompression:
+    title: "Decompression"
+    min: 1
+    methods: [System.IO.Compression.GZipStream::.ctor, System.IO.Compression.DeflateStream::.ctor,
+              System.IO.Compression.BrotliStream::.ctor, System.IO.Compression.ZipArchive::.ctor]
+  encoding:
+    title: "Base64 / hex decoding"
+    min: 1
+    methods: [System.Convert::FromBase64String, System.Convert::FromHexString]
+  image_pixel_decoding:
+    title: "Reads image pixels (steganography decoder)"
+    min: 2
+    methods: [System.Drawing.Bitmap::GetPixel, System.Drawing.Bitmap::LockBits, System.Drawing.Imaging.BitmapData::get_Scan0,
+              System.Drawing.Color::get_R, System.Drawing.Color::get_G, System.Drawing.Color::get_B,
+              System.Drawing.Color::get_A, System.Drawing.Color::ToArgb]
+  embedded_resources:
+    title: "Reads its own embedded resources"
+    min: 1
+    methods: [System.Reflection.Assembly::GetManifestResourceStream, System.Resources.ResourceManager::GetObject]
+  download:
+    title: "Downloads data from the Internet"
+    min: 1
+    methods: [System.Net.WebClient::DownloadData, System.Net.WebClient::DownloadString, System.Net.WebClient::DownloadFile,
+              System.Net.Http.HttpClient::GetByteArrayAsync, System.Net.Http.HttpClient::GetStringAsync,
+              System.Net.Http.HttpClient::GetAsync, System.Net.WebRequest::Create, System.Net.HttpWebRequest::GetResponse]
+  upload:
+    title: "Uploads data (exfiltration)"
+    min: 1
+    methods: [System.Net.WebClient::UploadData, System.Net.WebClient::UploadValues, System.Net.WebClient::UploadFile,
+              System.Net.WebClient::UploadString, System.Net.Http.HttpClient::PostAsync,
+              System.Net.Mail.SmtpClient::Send, System.Net.FtpWebRequest::GetRequestStream]
+  raw_sockets:
+    title: "Raw TCP/UDP communication"
+    min: 1
+    methods: [System.Net.Sockets.TcpClient::.ctor, System.Net.Sockets.Socket::Connect, System.Net.Sockets.TcpClient::Connect,
+              System.Net.Sockets.UdpClient::.ctor, System.Net.Sockets.TcpListener::Start]
+  process_start:
+    title: "Starts processes"
+    min: 1
+    methods: [System.Diagnostics.Process::Start, System.Diagnostics.ProcessStartInfo::.ctor]
+  persistence:
+    title: "Registry or scheduled-task persistence"
+    min: 1
+    methods: [Microsoft.Win32.RegistryKey::SetValue, Microsoft.Win32.Registry::SetValue,
+              Microsoft.Win32.TaskScheduler.TaskService::.ctor]
+  anti_debug:
+    title: "Anti-debugging"
+    min: 1
+    methods: [System.Diagnostics.Debugger::get_IsAttached, System.Diagnostics.Debugger::IsLogging]
+    pinvoke: [IsDebuggerPresent, CheckRemoteDebuggerPresent, NtQueryInformationProcess, NtSetInformationThread]
+  credential_theft:
+    title: "Credential / browser data theft"
+    min: 1
+    methods: [System.Security.Cryptography.ProtectedData::Unprotect, System.Data.SQLite.SQLiteConnection::.ctor,
+              Microsoft.Data.Sqlite.SqliteConnection::.ctor]
+    pinvoke: [CryptUnprotectData, BCryptDecrypt]
+  spying:
+    title: "Screen, clipboard or keyboard capture"
+    min: 1
+    methods: [System.Drawing.Graphics::CopyFromScreen, System.Windows.Forms.Clipboard::GetText,
+              System.Windows.Forms.Clipboard::GetDataObject]
+    pinvoke: [GetAsyncKeyState, SetWindowsHookEx, SetWindowsHookExA, SetWindowsHookExW, GetKeyboardState, BitBlt]
+  native_memory:
+    title: "Native executable memory (P/Invoke)"
+    min: 1
+    pinvoke: [VirtualAlloc, VirtualProtect, NtAllocateVirtualMemory, NtProtectVirtualMemory, RtlMoveMemory, CreateThread]
+  injection:
+    title: "Process injection / hollowing (P/Invoke)"
+    min: 2
+    pinvoke: [VirtualAllocEx, WriteProcessMemory, CreateRemoteThread, NtUnmapViewOfSection, ZwUnmapViewOfSection,
+              SetThreadContext, Wow64SetThreadContext, ResumeThread, QueueUserAPC, NtCreateThreadEx, OpenProcess,
+              CreateProcessA, CreateProcessW, NtWriteVirtualMemory]
+  amsi_etw_bypass:
+    title: "AMSI / ETW tampering"
+    min: 1
+    pinvoke: [AmsiScanBuffer, EtwEventWrite]
+
+obfuscators:
+  - {name: "ConfuserEx", type: obfuscator, patterns: ["ConfusedByAttribute", "ConfuserEx", "^Confuser\\b"]}
+  # renamer of ConfuserEx and derivatives: names made only of invisible Unicode characters (directional, zero-width)
+  - {name: "ConfuserEx-style invisible Unicode names", type: obfuscator, patterns: ["^[\u200b-\u200f\u202a-\u202e\u206a-\u206f]{6,}$"]}
+  - {name: ".NET Reactor", type: protector, patterns: ["\\.NET Reactor", "^__StaticArrayInitTypeSize=\\d+\\{[0-9A-F-]{36}\\}$", "^[A-Za-z0-9]{1}\\x7F", "Eziriz"]}
+  - {name: "SmartAssembly", type: obfuscator, patterns: ["SmartAssembly\\.", "PoweredByAttribute", "^SmartAssembly"]}
+  - {name: "Eazfuscator.NET", type: obfuscator, patterns: ["Eazfuscator", "^\\{[0-9A-F]{8}(-[0-9A-F]{4}){3}-[0-9A-F]{12}\\}$"]}
+  - {name: "Dotfuscator", type: obfuscator, patterns: ["DotfuscatorAttribute", "PreEmptive"]}
+  - {name: "Babel Obfuscator", type: obfuscator, patterns: ["BabelAttribute", "BabelObfuscatorAttribute"]}
+  - {name: "Agile.NET (CliSecure)", type: protector, patterns: ["ObfuscatedByAgileDotNetAttribute", "SecureTeam\\.Attributes", "AgileDotNetRT", "CliSecure"]}
+  - {name: "Crypto Obfuscator", type: obfuscator, patterns: ["CryptoObfuscator", "ObfuscatedByCryptoObfuscator"]}
+  - {name: "DeepSea Obfuscator", type: obfuscator, patterns: ["DeepSeaObfuscator"]}
+  - {name: "Goliath.NET", type: obfuscator, patterns: ["ObfuscatedByGoliath"]}
+  - {name: "KoiVM", type: virtualizer, patterns: ["KoiVM", "^Koi$"]}
+  - {name: "ILProtector", type: protector, patterns: ["ILProtector", "Protect32\\.dll", "Protect64\\.dll"]}
+  - {name: "Babel / Spices.Net", type: obfuscator, patterns: ["NineRays", "Spices\\.Net"]}
+  - {name: "Xenocode / Spoon", type: packer, patterns: ["Xenocode", "XenocodeRuntime"]}
+  - {name: "Costura.Fody (embedded assemblies)", type: bundler, patterns: ["^costura\\.", "Costura\\.AssemblyLoader"]}
+  - {name: "ConfuserEx (MindLated / Beds fork)", type: obfuscator, patterns: ["MindLated", "BedsProtector", "Beds-Protector"]}

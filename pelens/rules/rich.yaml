@@ -1,0 +1,130 @@
+# Rich header: comp.id = (product id << 16) | build.
+# Compiled for PELens from public information on the Microsoft toolchain (product ids and build numbers).
+products:
+  0x0000: {tool: "Unmarked objects (old)"}
+  0x0001: {tool: "Unmarked objects"}
+  0x0002: {tool: "Import library", version: "VS97"}
+  0x0004: {tool: "Linker", version: "VS6"}
+  0x0005: {tool: "CVTOMF", version: "VS6"}
+  0x0006: {tool: "Resource converter (CVTRES)", version: "VS98"}
+  0x000a: {tool: "C compiler", version: "VS6"}
+  0x000b: {tool: "C++ compiler", version: "VS6"}
+  0x000c: {tool: "AliasObj", version: "VS6"}
+  0x000e: {tool: "MASM assembler", version: "MASM 6.13"}
+  0x000f: {tool: "MASM assembler", version: "VS2003"}
+  0x0012: {tool: "MASM assembler", version: "MASM 6.14"}
+  0x0013: {tool: "Linker"}
+  0x0015: {tool: "C compiler", version: "VC++ 6.0"}
+  0x0016: {tool: "C++ compiler", version: "VC++ 6.0"}
+  0x0017: {tool: "C compiler", version: "VS6"}
+  0x0018: {tool: "C++ compiler", version: "VS6"}
+  0x0019: {tool: "Import library", version: "VS2002"}
+  0x001c: {tool: "C compiler", version: "VS2002"}
+  0x001d: {tool: "C++ compiler", version: "VS2002"}
+  0x0025: {tool: "Linker"}
+  0x002a: {tool: "MASM assembler", version: "MASM 6.15"}
+  0x0030: {tool: "C compiler", version: "VS6"}
+  0x0031: {tool: "C++ compiler", version: "VS6"}
+  0x003d: {tool: "Linker", version: "VS2002"}
+  0x003f: {tool: "Exports", version: "VS2002"}
+  0x0040: {tool: "MASM assembler", version: "VS2002"}
+  0x0045: {tool: "Resource converter (CVTRES)", version: "VS2002"}
+  0x005a: {tool: "Linker", version: "VS2003"}
+  0x005c: {tool: "Exports", version: "VS2003"}
+  0x005d: {tool: "Import library", version: "VS2003"}
+  0x005e: {tool: "Resource converter (CVTRES)", version: "VS2003"}
+  0x005f: {tool: "C compiler", version: "VS2003"}
+  0x0060: {tool: "C++ compiler", version: "VS2003"}
+  0x006d: {tool: "C compiler", version: "VS2005"}
+  0x006e: {tool: "C++ compiler", version: "VS2005"}
+  0x0078: {tool: "Linker", version: "VS2005"}
+  0x007a: {tool: "Exports", version: "VS2005"}
+  0x007b: {tool: "Import library", version: "VS2005"}
+  0x007c: {tool: "Resource converter (CVTRES)", version: "VS2005"}
+  0x007d: {tool: "MASM assembler", version: "VS2005"}
+  0x0083: {tool: "C compiler", version: "VS2008"}
+  0x0084: {tool: "C++ compiler", version: "VS2008"}
+  0x0091: {tool: "Linker", version: "VS2008"}
+  0x0092: {tool: "Exports", version: "VS2008"}
+  0x0093: {tool: "Import library", version: "VS2008"}
+  0x0094: {tool: "Resource converter (CVTRES)", version: "VS2008"}
+  0x0095: {tool: "MASM assembler", version: "VS2008"}
+  0x0097: {tool: "Resource"}
+  0x009a: {tool: "Resource converter (CVTRES)", version: "VS2010"}
+  0x009b: {tool: "Exports", version: "VS2010"}
+  0x009c: {tool: "Import library", version: "VS2010"}
+  0x009d: {tool: "Linker", version: "VS2010"}
+  0x009e: {tool: "MASM assembler", version: "VS2010"}
+  0x00aa: {tool: "C compiler", version: "VS2010"}
+  0x00ab: {tool: "C++ compiler", version: "VS2010"}
+  0x00c9: {tool: "Resource converter (CVTRES)", version: "VS2012"}
+  0x00ca: {tool: "Exports", version: "VS2012"}
+  0x00cb: {tool: "Import library", version: "VS2012"}
+  0x00cc: {tool: "Linker", version: "VS2012"}
+  0x00cd: {tool: "MASM assembler", version: "VS2012"}
+  0x00ce: {tool: "C compiler", version: "VS2012"}
+  0x00cf: {tool: "C++ compiler", version: "VS2012"}
+  0x00db: {tool: "Resource converter (CVTRES)", version: "VS2013"}
+  0x00dc: {tool: "Exports", version: "VS2013"}
+  0x00dd: {tool: "Import library", version: "VS2013"}
+  0x00de: {tool: "Linker", version: "VS2013"}
+  0x00df: {tool: "MASM assembler", version: "VS2013"}
+  0x00e0: {tool: "C compiler", version: "VS2013"}
+  0x00e1: {tool: "C++ compiler", version: "VS2013"}
+  0x00fd: {tool: "AliasObj"}
+  0x00fe: {tool: "CVTPGD"}
+  0x00ff: {tool: "Resource converter (CVTRES)"}
+  0x0100: {tool: "Exports"}
+  0x0101: {tool: "Import library"}
+  0x0102: {tool: "Linker"}
+  0x0103: {tool: "MASM assembler"}
+  0x0104: {tool: "C compiler"}
+  0x0105: {tool: "C++ compiler"}
+  0x0106: {tool: "C compiler (CIL conversion)"}
+  0x0107: {tool: "C++ compiler (CIL conversion)"}
+  0x0108: {tool: "C compiler (LTCG)"}
+  0x0109: {tool: "C++ compiler (LTCG)"}
+  0x010a: {tool: "MSIL (LTCG)"}
+  0x010b: {tool: "C compiler (PGO instrumented)"}
+  0x010c: {tool: "C++ compiler (PGO instrumented)"}
+  0x010d: {tool: "C compiler (PGO optimized)"}
+  0x010e: {tool: "C++ compiler (PGO optimized)"}
+# VS2015 and later use the same product ids (0x00fd-0x010e): the version depends on the build
+builds:
+  - {from: 23026, version: "VS2015 v14.0"}
+  - {from: 25017, version: "VS2017 v15.0"}
+  - {from: 25506, version: "VS2017 v15.3"}
+  - {from: 25542, version: "VS2017 v15.4"}
+  - {from: 25831, version: "VS2017 v15.5"}
+  - {from: 26128, version: "VS2017 v15.6"}
+  - {from: 26428, version: "VS2017 v15.7"}
+  - {from: 26726, version: "VS2017 v15.8"}
+  - {from: 27023, version: "VS2017 v15.9"}
+  - {from: 27508, version: "VS2019 v16.0"}
+  - {from: 27702, version: "VS2019 v16.1"}
+  - {from: 27905, version: "VS2019 v16.2"}
+  - {from: 28105, version: "VS2019 v16.3"}
+  - {from: 28314, version: "VS2019 v16.4"}
+  - {from: 28610, version: "VS2019 v16.5"}
+  - {from: 28805, version: "VS2019 v16.6"}
+  - {from: 29110, version: "VS2019 v16.7"}
+  - {from: 29333, version: "VS2019 v16.8"}
+  - {from: 29910, version: "VS2019 v16.9"}
+  - {from: 30037, version: "VS2019 v16.10"}
+  - {from: 30133, version: "VS2019 v16.11"}
+  - {from: 30401, version: "VS2022 v17.0"}
+  - {from: 30818, version: "VS2022 v17.1"}
+  - {from: 31114, version: "VS2022 v17.2"}
+  - {from: 31424, version: "VS2022 v17.3"}
+  - {from: 31721, version: "VS2022 v17.4"}
+  - {from: 32019, version: "VS2022 v17.5"}
+  - {from: 32323, version: "VS2022 v17.6"}
+  - {from: 32705, version: "VS2022 v17.7"}
+  - {from: 32919, version: "VS2022 v17.8"}
+  - {from: 33218, version: "VS2022 v17.9"}
+  - {from: 33521, version: "VS2022 v17.10"}
+  - {from: 33901, version: "VS2022 v17.11"}
+  - {from: 34226, version: "VS2022 v17.12"}
+  - {from: 34604, version: "VS2022 v17.13"}
+  - {from: 34823, version: "VS2022 v17.14"}
+  - {from: 35503, version: "VS2026 v18.0"}

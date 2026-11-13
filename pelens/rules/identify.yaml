@@ -1,0 +1,130 @@
+# Identification of packers, protectors, installers and compilers/languages.
+#
+# Each entry has a name, a type and one or more matchers; one matching matcher is enough.
+#   sections: exact section names (case-insensitive)
+#   ep:       hex bytes at the entry point, "??" = any byte (like PEiD signatures)
+#   strings:  byte strings searched in the file (prefix "re:" for a regular expression)
+#   overlay:  byte strings searched in the first 64 KB of the overlay
+#   imports:  imported DLL names (case-insensitive)
+# Types: packer, protector, installer, compiler, bundler. Packers and protectors raise the score;
+# installers, compilers and bundlers are shown as information only.
+
+signatures:
+  # --- Packers / protectors -------------------------------------------------------------------
+  - name: UPX
+    type: packer
+    sections: [UPX0, UPX1, UPX2, .UPX0, .UPX1]
+    ep: ["60 BE ?? ?? ?? ?? 8D BE ?? ?? ?? ??", "53 56 57 55 48 8D 35 ?? ?? ?? ?? 48 8D BE"]
+    strings: ["UPX!"]
+  - name: MPRESS
+    type: packer
+    sections: [.MPRESS1, .MPRESS2]
+    ep: ["60 E8 00 00 00 00 58 05 ?? ?? ?? ?? 8B 30 03 F0"]
+  - name: ASPack
+    type: packer
+    sections: [.aspack, .ASPack]
+    ep: ["60 E8 03 00 00 00 E9 EB 04 5D 45 55 C3 E8 01"]
+  - name: PECompact
+    type: packer
+    sections: [PEC2, pec1, pec2, PECompact2]
+    strings: ["PECompact2"]
+  - name: Themida / WinLicense
+    type: protector
+    sections: [.themida, .winlice, Themida, WinLicen, .boot]
+    strings: ["re:Themida|WinLicense"]
+  - name: VMProtect
+    type: protector
+    sections: [.vmp0, .vmp1, .vmp2]
+  - name: Enigma Protector
+    type: protector
+    sections: [.enigma1, .enigma2]
+  - name: NSPack
+    type: packer
+    sections: [.nsp0, .nsp1, .nsp2, nsp0, nsp1]
+  - name: Petite
+    type: packer
+    sections: [.petite]
+    ep: ["B8 ?? ?? ?? ?? 66 9C 60 50"]
+  - name: FSG
+    type: packer
+    ep: ["87 25 ?? ?? ?? ?? 61 94 55 A4 B6 80 FF 13"]
+  - name: MEW
+    type: packer
+    sections: [MEW]
+  - name: Obsidium
+    type: protector
+    strings: ["Obsidium"]
+  - name: PELock
+    type: protector
+    sections: [PELOCKnt]
+  - name: kkrunchy
+    type: packer
+    sections: [kkrunchy]
+  - name: MoleBox
+    type: packer
+    strings: ["MoleBox"]
+  - name: Armadillo
+    type: protector
+    strings: ["re:Armadillo|ArmAccess\\.dll"]
+  - name: Smart Install Maker / Molebox-like SFX
+    type: packer
+    strings: ["Smart Install Maker"]
+
+  # --- Installers / self-extracting archives -------------------------------------------------
+  - name: NSIS installer
+    type: installer
+    strings: ["Nullsoft Install System"]
+    overlay: ["NullsoftInst"]
+  - name: Inno Setup installer
+    type: installer
+    strings: ["Inno Setup Setup Data", "Inno Setup Messages", "re:JR\\.Inno\\.Setup"]
+  - name: InstallShield
+    type: installer
+    strings: ["InstallShield"]
+  - name: 7-Zip SFX
+    type: installer
+    strings: ["7-Zip sfx", "7zS.sfx"]
+    overlay: ["7z\xbc\xaf\x27\x1c"]
+  - name: WinRAR SFX
+    type: installer
+    overlay: ["Rar!\x1a\x07"]
+  - name: Advanced Installer
+    type: installer
+    strings: ["Advanced Installer"]
+
+  # --- Compilers / languages / bundlers ------------------------------------------------------
+  - name: Go
+    type: compiler
+    strings: ["Go build ID: ", "runtime.gopanic", "re:go1\\.\\d+(\\.\\d+)?\\x00"]
+  - name: Rust
+    type: compiler
+    strings: ["rust_panic", "re:/rustc/[0-9a-f]{40}", "RUST_BACKTRACE"]
+  - name: Nim
+    type: compiler
+    strings: ["@nimFrame", "NimMain", "re:fatal\\.nim|system\\.nim"]
+  - name: Delphi / Borland
+    type: compiler
+    strings: ["re:Borland\\\\Delphi|SOFTWARE\\\\Borland\\\\Delphi\\\\RTL|Embarcadero Delphi"]
+    sections: [CODE, BSS]
+  - name: Visual Basic 6
+    type: compiler
+    imports: [msvbvm60.dll, msvbvm50.dll]
+  - name: MinGW (GCC)
+    type: compiler
+    strings: ["re:Mingw-w64 runtime failure|GCC: \\(GNU\\)"]
+  - name: AutoIt (compiled script)
+    type: bundler
+    strings: ["AU3!EA06", ">>>AUTOIT SCRIPT<<<", "re:AutoIt v3 Script"]
+  - name: PyInstaller (Python)
+    type: bundler
+    strings: ["_MEIPASS", "PyInstaller", "pyi-runtime-tmpdir"]
+    overlay: ["MEI\x0c\x0b\x0a\x0b\x0e"]
+  - name: py2exe (Python)
+    type: bundler
+    strings: ["PY2EXE_VERBOSE", "py2exe"]
+  - name: Nuitka (Python)
+    type: bundler
+    strings: ["NUITKA_ONEFILE_PARENT", "nuitka"]
+  - name: Electron / NW.js
+    type: bundler
+    strings: ["re:electron\\.asar|nw\\.dll"]

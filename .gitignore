@@ -1,0 +1,15 @@
+__pycache__/
+*.egg-info/
+.venv/
+build/
+dist/
+*.spec
+!pelens-gui.spec
+*.json
+*.csv
+# never put malware samples in the repository
+samples/
+*.zip
+*.7z
+*.rar
+

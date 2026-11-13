@@ -1,0 +1,933 @@
+# PELens scoring rules.
+#
+# Each rule calls a "check" (defined in pelens/scoring.py) with some parameters.
+# If the check finds something, "weight" is added to the score. The total is capped at 100.
+# You can change weights and thresholds, disable a rule with "enabled: false",
+# or duplicate a rule with different parameters (ids must be unique).
+
+verdicts:            # highest first
+  - {min: 60, label: "highly suspicious"}
+  - {min: 30, label: "suspicious"}
+  - {min: 10, label: "slightly suspicious"}
+  - {min: 0,  label: "no relevant indicators"}
+
+rules:
+  # --- Sections -------------------------------------------------------------------------
+  - id: rwx_section
+    check: rwx_section
+    weight: 25
+    severity: high
+    title: "Writable and executable section (RWX)"
+    description: >
+      A section that is both writable and executable lets code modify itself: typical of packers,
+      crypters and shellcode that decrypt themselves in memory.
+
+  - id: exec_data_section
+    check: exec_unexpected_section
+    weight: 20
+    severity: high
+    title: "Data section marked as executable"
+    description: "Sections that normally hold data (.data, .rdata, .rsrc...) should not be executable."
+    params:
+      names: [".data", ".rdata", ".rsrc", ".reloc", ".idata", ".edata", ".pdata", ".bss", ".tls", ".CRT"]
+
+  - id: multiple_exec_sections
+    check: exec_section_count
+    weight: 8
+    severity: low
+    title: "Multiple executable sections"
+    description: "A normal executable usually has a single code section."
+    params: {min: 2}
+
+  - id: high_entropy_exec
+    check: high_entropy_section
+    weight: 20
+    severity: high
+    title: "Executable section with very high entropy"
+    description: "Compressed or encrypted code: points to a packer or a payload decrypted at runtime."
+    params: {threshold: 7.0, executable_only: true}
+
+  - id: high_entropy_section
+    check: high_entropy_section
+    weight: 10
+    severity: medium
+    title: "Section with very high entropy"
+    description: "Compressed or encrypted data inside the file."
+    params: {threshold: 7.2, skip_executable: true, min_size: 1024, skip_names: [".rsrc"]}
+
+  - id: virtual_only_section
+    check: virtual_only_section
+    weight: 15
+    severity: medium
+    title: "Section empty on disk but large in memory"
+    description: >
+      A section with raw size 0 (or much smaller than its virtual size) is filled at runtime:
+      the classic layout of UPX and other packers.
+    params: {ratio: 10, min_virtual_size: 4096, executable_only: true}
+
+  - id: obfuscated_code
+    check: identified
+    weight: 20
+    severity: high
+    title: "Code obfuscated with a known obfuscator"
+    description: >
+      Function and package names have been replaced with random ones and literal strings encrypted (e.g. garble
+      for Go): the program is built to be hard to analyze. Legitimate software almost never does this.
+    params: {types: [obfuscator]}
+
+  - id: known_packer
+    check: identified
+    weight: 20
+    severity: high
+    title: "Known packer or protector"
+    description: >
+      The file is packed or protected with a known tool (UPX, Themida, VMProtect, MPRESS...): the real code is
+      compressed or encrypted and only appears in memory. Legitimate software uses some of these too, but
+      they are very common in malware. See rules/identify.yaml.
+    params: {types: [packer, protector]}
+
+  - id: packer_section_names
+    check: section_names
+    enabled: false     # sostituita da known_packer (rules/identify.yaml), tenuta come esempio
+    weight: 20
+    severity: high
+    title: "Known packer section names"
+    description: "The section name matches a known packer."
+    params:
+      names: ["UPX0", "UPX1", "UPX2", ".UPX", ".aspack", ".adata", ".ASPack", ".petite", ".packed", "PEC2", "PECompact2",
+              ".MPRESS1", ".MPRESS2", ".nsp0", ".nsp1", ".themida", ".winlice", ".vmp0", ".vmp1", ".vmp2",
+              ".enigma1", ".enigma2", "MEW", ".yP", ".perplex", "kkrunchy", ".boom", ".ccg", ".neolite", "PELOCKnt"]
+
+  - id: weird_section_names
+    check: weird_section_names
+    weight: 8
+    severity: low
+    title: "Unusual section names"
+    description: "Empty names or non-printable characters are often produced by obfuscation tools."
+
+  # --- Entry point ----------------------------------------------------------------------
+  - id: ep_outside_sections
+    check: ep_outside_sections
+    weight: 20
+    severity: high
+    title: "Entry point outside any section"
+    description: "Execution starts in an area not covered by sections (e.g. in the headers): an anti-analysis trick."
+
+  - id: ep_not_executable
+    check: ep_not_executable
+    weight: 20
+    severity: high
+    title: "Entry point in a non-executable section"
+    description: "The program starts in a section without execute permission."
+
+  - id: ep_last_section
+    check: ep_in_last_section
+    weight: 12
+    severity: medium
+    title: "Entry point in the last section"
+    description: "Packers and file infectors often append their code at the end of the file."
+
+  # --- Imports --------------------------------------------------------------------------
+  - id: no_imports
+    check: import_count
+    weight: 15
+    severity: medium
+    title: "No imports"
+    description: "An executable without imports resolves APIs by itself: typical of packed code or shellcode."
+    params: {max: 0}
+
+  - id: few_imports
+    check: import_count
+    weight: 10
+    severity: medium
+    title: "Very few imports"
+    description: "With so few imported functions, the program probably loads the rest dynamically."
+    params: {min: 1, max: 8}
+
+  - id: dynamic_resolution
+    check: api_group
+    weight: 8
+    severity: low
+    title: "Dynamic API resolution"
+    description: "Few imports but LoadLibrary + GetProcAddress: the APIs actually used are loaded at runtime to hide them."
+    params: {min: 2, max_imports: 30, apis: [LoadLibraryA, LoadLibraryW, LoadLibraryExA, LoadLibraryExW, GetProcAddress, LdrLoadDll, LdrGetProcedureAddress]}
+
+  - id: trojanized_library
+    check: impersonated_library
+    weight: 25
+    severity: high
+    title: "Trojanized copy of a known library (side-loading)"
+    description: >
+      The version information says the file comes from a well-known vendor, but it is not validly signed and it
+      contains loader code (executable memory, API hashing, an encrypted payload, dead-drop or C2 addresses):
+      a copy of a real library with malicious code added, placed next to a legitimate program that loads it.
+    params:
+      vendors: "Qt Company|Qt Project|Google|Chromium|Mozilla|Oracle|Sun Microsystems|Python Software Foundation|VideoLAN|Adobe|Apple Inc|Intel|NVIDIA|Advanced Micro Devices|Igor Pavlov|Zoom|Cisco|VMware|Citrix|Dropbox|Electron|GitHub|OpenSSL|libcurl|SQLite|Microsoft|Notepad\\+\\+|Tencent|Kingsoft|Avast|ESET|Kaspersky|Symantec|McAfee|Trend Micro|Bitdefender"
+      strict_vendors: "Microsoft"
+
+  - id: dropper_profile
+    check: dropper
+    weight: 15
+    severity: high
+    title: "Drops an embedded payload and runs it"
+    description: >
+      The file carries a payload (encrypted block, hidden executable or a loop that decrypts embedded data),
+      writes files into a folder the user can write to (AppData, Temp, ProgramData, Public) and starts processes:
+      the shape of a dropper.
+    params: {}
+
+  - id: runtime_api_resolution
+    check: runtime_api_strings
+    weight: 15
+    severity: medium
+    title: "Many APIs resolved at runtime by name"
+    description: >
+      Dozens of Windows API names are stored as strings and are not in the import table: they are loaded one by
+      one with GetProcAddress, so that a quick look at the imports shows nothing of what the program does.
+      The functions it really uses are the ones listed here.
+    params: {min: 12, min_sensitive: 3}
+
+  - id: process_memory_reading
+    check: api_combo
+    weight: 15
+    severity: high
+    title: "Reads the memory of other processes (hidden APIs)"
+    description: >
+      Opens other processes, walks their memory or modules and reads it, with the APIs hidden from the import
+      table: used to steal data from browsers and other applications (cookies, tokens, passwords already
+      decrypted in memory) or to look for code to patch. Debuggers import these APIs openly.
+    params:
+      hidden_only: true
+      groups:
+        - [OpenProcess, NtOpenProcess, ZwOpenProcess]
+        - [ReadProcessMemory, NtReadVirtualMemory, ZwReadVirtualMemory, Toolhelp32ReadProcessMemory]
+        - [VirtualQueryEx, NtQueryVirtualMemory, ZwQueryVirtualMemory, K32EnumProcessModules, K32EnumProcessModulesEx,
+           EnumProcessModules, EnumProcessModulesEx, K32GetModuleInformation, GetModuleInformation, Module32First,
+           Module32FirstW, Module32Next, Module32NextW]
+
+  - id: hidden_desktop
+    check: api_combo
+    weight: 15
+    severity: high
+    title: "Starts programs on a hidden desktop"
+    description: >
+      Creates a separate desktop and starts processes on it: the user does not see the windows. Used by hidden VNC
+      and by infostealers that run the browser invisibly to extract its cookies.
+    params:
+      groups:
+        - [CreateDesktopA, CreateDesktopW, CreateDesktopExA, CreateDesktopExW]
+        - [CreateProcessA, CreateProcessW, CreateProcessAsUserA, CreateProcessAsUserW, CreateProcessInternalW,
+           ShellExecuteExA, ShellExecuteExW]
+
+  - id: api_injection
+    check: api_combo
+    weight: 25
+    severity: high
+    title: "Process injection APIs"
+    description: >
+      The program imports both APIs to write into another process's memory and APIs to run code
+      there: the combination used for code injection and process hollowing.
+    params:
+      groups:
+        - [VirtualAllocEx, WriteProcessMemory, NtWriteVirtualMemory, ZwWriteVirtualMemory, NtMapViewOfSection,
+           ZwMapViewOfSection, NtUnmapViewOfSection, ZwUnmapViewOfSection]
+        - [CreateRemoteThread, CreateRemoteThreadEx, NtCreateThreadEx, ZwCreateThreadEx, RtlCreateUserThread,
+           QueueUserAPC, NtQueueApcThread, SetThreadContext, NtSetContextThread, Wow64SetThreadContext]
+
+  - id: api_antidebug
+    check: api_group
+    weight: 10
+    severity: medium
+    title: "Anti-debug APIs"
+    description: "Functions used to detect a debugger or an analysis environment."
+    params:
+      min: 2
+      # IsDebuggerPresent and OutputDebugString are not listed: almost every C runtime uses them
+      apis: [CheckRemoteDebuggerPresent, NtQueryInformationProcess, ZwQueryInformationProcess,
+             NtSetInformationThread, ZwSetInformationThread, NtQuerySystemInformation, NtClose,
+             FindWindowA, FindWindowW]
+
+  - id: api_keylogger
+    check: api_combo
+    weight: 15
+    severity: medium
+    title: "Keylogging APIs"
+    description: >
+      Polls the state of every key (GetAsyncKeyState or raw input), turns key codes into text and notes the window
+      in the foreground: what a keylogger does. Normal GUIs read the keyboard through their own messages.
+    params:
+      groups:
+        - [GetAsyncKeyState, GetRawInputData]
+        - [ToUnicode, ToUnicodeEx, ToAscii, ToAsciiEx, GetKeyNameTextA, GetKeyNameTextW, MapVirtualKeyA,
+           MapVirtualKeyW, MapVirtualKeyExA, MapVirtualKeyExW]
+        - [GetForegroundWindow, GetWindowTextA, GetWindowTextW]
+
+  - id: keyboard_hook
+    check: code_trait
+    weight: 10
+    severity: medium
+    title: "Global keyboard hook"
+    description: >
+      SetWindowsHookEx is called with WH_KEYBOARD_LL: every key pressed in any program goes through this code.
+      Keyloggers do this; so do some legitimate tools for global shortcuts (e.g. Notepad++'s document switcher),
+      so it counts as a clue, not as proof.
+    params: {trait: kbd_hooks}
+
+  - id: api_persistence
+    check: api_group
+    weight: 10
+    severity: medium
+    title: "Creates or modifies Windows services"
+    description: "A service starts with the system: one of the ways to survive a reboot (Run keys are a separate rule)."
+    params:
+      min: 1
+      apis: [CreateServiceA, CreateServiceW, ChangeServiceConfigA, ChangeServiceConfigW, ChangeServiceConfig2A,
+             ChangeServiceConfig2W]
+
+  - id: api_network
+    check: api_group
+    weight: 8
+    severity: low
+    title: "Network communication"
+    description: "The program can communicate over the Internet."
+    params:
+      min: 2
+      apis: [InternetOpenA, InternetOpenW, InternetOpenUrlA, InternetOpenUrlW, InternetReadFile, HttpSendRequestA,
+             HttpSendRequestW, URLDownloadToFileA, URLDownloadToFileW, WinHttpOpen, WinHttpSendRequest,
+             WSAStartup, socket, connect, send, recv, gethostbyname, getaddrinfo]
+
+  - id: api_crypto
+    check: api_group
+    weight: 8
+    severity: low
+    title: "Encryption APIs"
+    description: "Use of cryptographic functions: legitimate, but also common in ransomware."
+    params:
+      min: 2
+      apis: [CryptEncrypt, CryptDecrypt, CryptGenKey, CryptImportKey, CryptAcquireContextA, CryptAcquireContextW,
+             BCryptEncrypt, BCryptDecrypt, BCryptGenerateSymmetricKey]
+
+  # --- Overlay, resources, structure ----------------------------------------------------
+  - id: embedded_pe
+    check: embedded_pe
+    weight: 20
+    severity: high
+    title: "Executable hidden inside the file"
+    description: "A resource or the overlay starts with 'MZ': another PE is embedded (dropper)."
+
+  - id: hidden_encrypted_pe
+    check: hidden_pe
+    weight: 35
+    severity: high
+    title: "Encrypted executable hidden in the file"
+    description: >
+      Another PE file, encrypted with a repeating XOR key, is stored inside this one (recognized from the
+      known bytes of the DOS header). Legitimate software has no reason to hide an executable this way.
+    params: {encrypted: true}
+
+  - id: embedded_pe_in_section
+    check: hidden_pe
+    weight: 15
+    severity: medium
+    title: "Executable stored inside a section"
+    description: "A complete PE file sits in a code or data section (not in resources or overlay): a dropper or packed payload."
+    params: {encrypted: false, plain_regions: ["section"]}
+
+  - id: signature_mismatch
+    check: signature
+    weight: 30
+    severity: high
+    title: "Signature does not belong to this file"
+    description: >
+      The file carries an Authenticode signature, but the hash it signs is not the hash of this file: the file
+      was modified after signing, or the signature was copied from another program (e.g. with SigThief) to
+      look trusted.
+    params: {problem: mismatch}
+
+  - id: signature_invalid
+    check: signature
+    weight: 20
+    severity: high
+    title: "Invalid signature"
+    description: "The signer's cryptographic signature does not verify."
+    params: {problem: invalid}
+
+  - id: signature_untrusted
+    check: signature
+    weight: 10
+    severity: medium
+    title: "Signed with an untrusted certificate"
+    description: "Self-signed certificate, or a chain that does not lead to a trusted Microsoft root: the signature proves nothing."
+    params: {problem: untrusted}
+
+  - id: large_overlay
+    check: overlay
+    weight: 10
+    severity: medium
+    title: "Large overlay"
+    description: "Data appended after the end of the last section (installers, payloads, configuration)."
+    params: {min_ratio: 0.3, min_entropy: 5.0}
+
+  - id: high_entropy_overlay
+    check: overlay
+    weight: 12
+    severity: medium
+    title: "Compressed or encrypted overlay"
+    description: "The data appended to the file has very high entropy."
+    params: {min_entropy: 7.2, min_size: 4096}
+
+  - id: high_entropy_resource
+    check: high_entropy_resource
+    weight: 12
+    severity: medium
+    title: "Compressed or encrypted resource"
+    description: "A large resource with very high entropy may contain an encrypted payload."
+    params: {threshold: 7.4, min_size: 8192, ignore_types: [RT_ICON, RT_GROUP_ICON, RT_BITMAP]}
+
+  - id: high_file_entropy
+    check: file_entropy
+    weight: 10
+    severity: medium
+    title: "Very high overall entropy"
+    description: "The whole file looks compressed or encrypted."
+    params: {threshold: 7.2}
+
+  - id: tls_callbacks
+    check: tls_callbacks
+    weight: 5
+    severity: medium
+    title: "TLS callbacks present"
+    description: "Code that runs before the entry point: used for anti-debugging or to run code covertly."
+
+  - id: timestamp_anomaly
+    check: timestamp
+    weight: 5
+    severity: low
+    title: "Unusual compile timestamp"
+    description: "Date in the future, zero or before 1995: probably forged."
+
+  - id: checksum_mismatch
+    check: checksum
+    weight: 5
+    severity: low
+    title: "Wrong checksum"
+    description: "The header checksum is set but does not match: the file may have been modified."
+
+  - id: inconsistent_metadata
+    check: consistency
+    weight: 8
+    severity: low
+    title: "Dates or versions do not match"
+    description: "Compile date, debug directory, Rich header, linker version or signing date contradict each other: the header was edited by hand."
+
+  - id: rich_header_removed
+    check: rich_removed
+    weight: 5
+    severity: low
+    title: "Rich header removed"
+    description: "Built with Visual Studio, but the Rich header (toolchain fingerprint) was wiped afterwards: a trick to hinder attribution."
+
+  - id: rich_header_forged
+    check: rich_checksum
+    weight: 10
+    severity: medium
+    title: "Forged Rich header"
+    description: "The Rich header (toolchain fingerprint) was copied from another file or edited: a trick to mislead attribution."
+
+  - id: parser_warnings
+    check: parser_warnings
+    weight: 8
+    severity: low
+    title: "Structural anomalies"
+    description: "The parser reported malformed structures (often deliberate, to confuse analysis tools)."
+    params: {min: 3}
+
+  # --- Strings --------------------------------------------------------------------------
+  - id: hidden_strings
+    check: hidden_strings
+    weight: 5
+    severity: low
+    title: "Stack strings"
+    description: >
+      Strings built character by character in code. Malware does this to hide them, but compilers also
+      do it when optimizing copies of short strings: on their own they carry little weight.
+    params: {min: 1}
+
+  - id: hidden_iocs
+    check: string_tags
+    weight: 20
+    severity: high
+    title: "Indicators hidden in stack strings (URLs, commands, IPs...)"
+    description: "Indicators of compromise built character by character: the program hides them on purpose."
+    # max_words: long sentences (e.g. error messages with the URL to report bugs) are not hidden indicators
+    params: {sources: [stack], tags: [url, ip, shell, autorun, ransom, antianalysis, deaddrop, ip_url, sandbox], max_words: 8}
+
+  - id: static_shell
+    check: string_tags
+    weight: 10
+    severity: medium
+    title: "System commands in strings"
+    description: "Full command lines (encoded PowerShell, shadow copy deletion, downloads via certutil...)."
+    params: {sources: [static], tags: [shell]}
+
+  - id: static_autorun
+    check: string_tags
+    weight: 10
+    severity: medium
+    title: "Autorun registry keys"
+    description: "References to registry keys used for persistence."
+    params: {sources: [static], tags: [autorun]}
+
+  - id: static_antianalysis
+    check: string_tags
+    weight: 8
+    severity: low
+    title: "References to VMs, sandboxes or debuggers"
+    description: "The program looks for names of analysis tools or virtual machines."
+    params: {sources: [static], tags: [antianalysis], min: 2}
+
+  - id: static_ransom
+    check: string_tags
+    weight: 15
+    severity: high
+    title: "Typical ransomware text"
+    description: "Ransom-note text: payment in bitcoin/monero, files that have been encrypted, decryptor, .onion addresses."
+    params: {sources: [static], tags: [ransom]}
+
+  - id: dead_drop
+    check: string_tags
+    weight: 15
+    severity: high
+    title: "Dead drop resolver / file hosting URLs"
+    description: >
+      Links to Telegram, Steam profiles, Pastebin, Discord, GitHub raw, tunnels and file hosting services:
+      infostealers and loaders read their real C2 address from these pages or download payloads from them.
+    params: {sources: [static, stack], tags: [deaddrop]}
+
+  - id: ip_url
+    check: string_tags
+    weight: 10
+    severity: medium
+    title: "URL with a hardcoded IP address"
+    description: "Legitimate software almost always uses domain names; a raw IP in a URL is typical of C2 servers."
+    params: {sources: [static, stack], tags: [ip_url]}
+
+  - id: ip_lookup
+    check: string_tags
+    weight: 5
+    severity: low
+    title: "Public IP lookup services"
+    description: "Services used to learn the victim's public IP and country (common in stealers and bots)."
+    params: {sources: [static, stack], tags: [ip_lookup]}
+
+  - id: stealer_targets
+    check: string_tags
+    weight: 20
+    severity: high
+    title: "Infostealer targets"
+    description: >
+      References to browser credential and cookie stores, crypto wallets, Telegram/Discord sessions or
+      FTP clients: the files an infostealer collects.
+    params: {sources: [static, stack], tags: [stealer], min: 3}
+
+  - id: self_deletion
+    check: string_tags
+    weight: 10
+    severity: medium
+    title: "Deletes itself after running"
+    description: "A command waits a few seconds (timeout, ping or choice) and then deletes a file: the classic way for a program to remove its own executable."
+    params: {sources: [static, stack], tags: [self_delete]}
+
+  - id: browser_abuse
+    check: string_tags
+    weight: 20
+    severity: high
+    title: "Abuses the browser to steal cookies"
+    description: >
+      References to Chromium internals used to get cookies and tokens around App-Bound Encryption: the network
+      service process to read in memory, remote debugging, the elevation service, the app-bound key.
+    params: {sources: [static, stack], tags: [browser_abuse]}
+
+  - id: code_patterns
+    check: string_tags
+    weight: 10
+    severity: medium
+    title: "Byte patterns of code to search in memory"
+    description: >
+      Hex strings that decode to x86/x64 instructions (often with wildcards): the program searches another
+      module's code for these bytes, to find a function to call, hook or patch.
+    params: {sources: [static, stack], tags: [code_pattern]}
+
+  - id: sandbox_checks
+    check: string_tags
+    weight: 10
+    severity: medium
+    title: "Sandbox / VM detection strings"
+    description: "Names that only make sense to detect sandboxes and virtual machines (Sandboxie, Cuckoo, VirtualBox...)."
+    params: {sources: [static, stack], tags: [sandbox]}
+
+  # --- DLL side-loading ------------------------------------------------------------------
+  - id: sideload_name
+    check: sideload_name
+    weight: 15
+    severity: high
+    title: "Unsigned DLL named like a Windows system DLL"
+    description: >
+      The DLL has the name of a Windows system library but no digital signature: typical of DLL side-loading
+      and hijacking, where a legitimate program is tricked into loading a malicious copy from its own folder.
+    params:
+      names: [version.dll, winmm.dll, dbghelp.dll, dbgcore.dll, cryptbase.dll, cryptsp.dll, uxtheme.dll,
+              dwmapi.dll, wtsapi32.dll, userenv.dll, profapi.dll, propsys.dll, windowscodecs.dll, secur32.dll,
+              sspicli.dll, dpapi.dll, msimg32.dll, winhttp.dll, wininet.dll, iphlpapi.dll, netapi32.dll,
+              wldp.dll, mpr.dll, oleacc.dll, textshaping.dll, d3d9.dll, d3d11.dll, dxgi.dll, wer.dll,
+              xmllite.dll, msftedit.dll, srvcli.dll, wkscli.dll, ntmarta.dll, rasapi32.dll, rasman.dll,
+              mswsock.dll, comctl32.dll, apphelp.dll, dwrite.dll, winspool.drv, dinput8.dll, xinput1_3.dll,
+              mscms.dll, wbemcomn.dll, fltlib.dll, cscapi.dll, edgegdi.dll, linkinfo.dll, ntshrui.dll,
+              slc.dll, sxs.dll, uiautomationcore.dll, umpdc.dll, wintrust.dll, wofutil.dll, ktmw32.dll,
+              vaultcli.dll, colorui.dll, dui70.dll, duser.dll, mfc42.dll, msvcp140.dll, vcruntime140.dll,
+              libcurl.dll, avrt.dll, dsound.dll, hid.dll, credui.dll, cryptnet.dll]
+
+  - id: proxy_dll
+    check: proxy_dll
+    weight: 10
+    severity: medium
+    title: "Proxy DLL exports"
+    description: >
+      Most exports are forwarded to another DLL, or many exports point to the same few stubs: a proxy DLL
+      that passes calls to the real library while running its own code (common in side-loading).
+    params: {min_exports: 10}
+
+  # --- Loader techniques in the code -----------------------------------------------------
+  - id: peb_access
+    check: code_trait
+    weight: 5
+    severity: medium
+    title: "Direct PEB access"
+    description: >
+      The code reads the Process Environment Block (gs:[0x60] / fs:[0x30]) to find loaded modules such as
+      kernel32 and ntdll without importing anything: typical of loaders and shellcode (system tools do it too,
+      so on its own it weighs little).
+    params: {trait: peb_access}
+
+  - id: manual_export_parsing
+    check: code_trait
+    weight: 15
+    severity: high
+    title: "Manual export table parsing"
+    description: >
+      The code reads a module's e_lfanew and then its export directory: it resolves API addresses by itself
+      instead of using GetProcAddress, to hide which functions it uses. Debuggers and runtimes parse PE
+      images too, so it only counts together with PEB access or API name hashing.
+    params: {trait: export_parsing, requires_any: [peb_access, hash_loops, api_hashes]}
+
+  - id: api_hashing
+    check: api_hashing
+    weight: 20
+    severity: high
+    title: "API hashing"
+    description: >
+      Hashes of well-known API names (ROR13, djb2, FNV-1a, MurmurHash3) or a name-hashing loop used together with manual
+      module/export lookup: APIs are resolved by hash so their names never appear in the file.
+    params: {min_known: 2}
+
+  - id: direct_syscalls
+    check: code_trait
+    weight: 20
+    severity: high
+    title: "Direct system calls"
+    description: >
+      syscall / sysenter / int 0x2e outside ntdll: the program calls the kernel directly to bypass
+      user-mode hooks of EDR and sandboxes.
+    params: {trait: syscalls}
+
+  - id: rwx_allocation
+    check: code_trait
+    weight: 15
+    severity: high
+    title: "Executable memory allocation (RWX)"
+    description: >
+      VirtualAlloc-style call with PAGE_EXECUTE_READWRITE: memory where a payload or shellcode will be written
+      and run (JIT compilers do it too, e.g. regex engines).
+    params: {trait: rwx_alloc}
+
+  - id: timing_checks
+    check: code_trait
+    weight: 5
+    severity: low
+    title: "Timing checks (rdtsc)"
+    description: "Reads the CPU cycle counter several times: often used to detect debuggers and sandboxes by timing."
+    params: {trait: rdtsc, min: 2}
+
+  # --- .NET assemblies (metadata, see rules/dotnet.yaml) ----------------------------------
+  - id: dotnet_packed_loader
+    check: dotnet_api
+    weight: 25
+    severity: high
+    title: ".NET loader: decrypts/unpacks and loads an assembly in memory"
+    description: >
+      Assembly.Load (or similar) together with decryption, decompression, Base64 or embedded resources:
+      the next stage is unpacked in memory and never written to disk.
+    params: {all_of: [in_memory_loading], any_of: [decryption, decompression, encoding, embedded_resources]}
+
+  - id: dotnet_in_memory_loading
+    check: dotnet_api
+    weight: 10
+    severity: medium
+    title: ".NET in-memory assembly loading"
+    description: "Loads .NET code from a byte array instead of a file on disk."
+    params: {all_of: [in_memory_loading]}
+
+  - id: dotnet_shellcode_runner
+    check: dotnet_api
+    weight: 20
+    severity: high
+    title: ".NET shellcode runner (native memory via P/Invoke)"
+    description: "Calls VirtualAlloc/VirtualProtect/CreateThread through P/Invoke: native code is written to memory and run."
+    params: {all_of: [native_memory]}
+
+  - id: dotnet_injection
+    check: dotnet_api
+    weight: 25
+    severity: high
+    title: ".NET process injection (P/Invoke)"
+    description: "Imports the native APIs used to write into and run code in another process (injection, hollowing)."
+    params: {all_of: [injection]}
+
+  - id: dotnet_amsi_etw
+    check: dotnet_api
+    weight: 20
+    severity: high
+    title: "AMSI / ETW tampering"
+    description: "References AmsiScanBuffer or EtwEventWrite: used to blind antivirus scanning and logging."
+    params: {all_of: [amsi_etw_bypass]}
+
+  - id: dotnet_credential_theft
+    check: dotnet_api
+    weight: 20
+    severity: high
+    title: ".NET credential theft"
+    description: "DPAPI decryption (ProtectedData.Unprotect / CryptUnprotectData) or SQLite access: how stealers read browser passwords and cookies."
+    params: {all_of: [credential_theft]}
+
+  - id: dotnet_download_execute
+    check: dotnet_api
+    weight: 15
+    severity: high
+    title: ".NET download and execute"
+    description: "Downloads data from the Internet and starts processes or loads assemblies."
+    params: {all_of: [download], any_of: [process_start, in_memory_loading]}
+
+  - id: dotnet_spying
+    check: dotnet_api
+    weight: 10
+    severity: medium
+    title: ".NET screen / clipboard / keyboard capture"
+    description: "Captures the screen, reads the clipboard or the keyboard state."
+    params: {all_of: [spying]}
+
+  - id: dotnet_exfiltration
+    check: dotnet_api
+    weight: 5
+    severity: low
+    title: ".NET data upload"
+    description: "Uploads data via HTTP, SMTP or FTP."
+    params: {all_of: [upload]}
+
+  - id: dotnet_anti_debug
+    check: dotnet_api
+    weight: 5
+    severity: low
+    title: ".NET anti-debugging"
+    description: "Checks whether a debugger is attached."
+    params: {all_of: [anti_debug]}
+
+  - id: dotnet_persistence
+    check: dotnet_api
+    weight: 5
+    severity: low
+    title: ".NET registry / scheduled task writes"
+    description: "Writes registry values or creates scheduled tasks (see also the autorun strings rule)."
+    params: {all_of: [persistence]}
+
+  - id: dotnet_metadata_tampering
+    check: dotnet_metadata_tampering
+    weight: 20
+    severity: high
+    title: "Tampered .NET metadata (anti-analysis)"
+    description: >
+      Duplicate or non-standard metadata streams, or tables that cannot be parsed: a protector broke the
+      metadata on purpose so that dnSpy, ILSpy and analysis libraries fail, while the CLR still runs it.
+      Normal compilers never produce this.
+    params: {}
+
+  - id: dotnet_encrypted_strings
+    check: dotnet_no_user_strings
+    weight: 10
+    severity: medium
+    title: "Encrypted .NET string literals"
+    description: >
+      A large assembly with (almost) no string literals: real programs always have some, so they were
+      encrypted by a protector and are only decrypted at runtime.
+    params: {min_names: 300, max_strings: 3}
+
+  - id: dotnet_native_pointers
+    check: dotnet_api
+    weight: 10
+    severity: medium
+    title: ".NET calls native code through function pointers"
+    description: "Marshal.GetDelegateForFunctionPointer turns a native address into a callable delegate: APIs resolved at runtime or shellcode."
+    params: {all_of: [native_function_pointer]}
+
+  - id: dotnet_obfuscator
+    check: dotnet_obfuscator
+    weight: 15
+    severity: medium
+    title: "Known .NET obfuscator / protector"
+    description: "Markers of a known obfuscator, protector or virtualizer (ConfuserEx, .NET Reactor, SmartAssembly, KoiVM...)."
+    params: {types: [obfuscator, protector, virtualizer, packer]}
+
+  - id: dotnet_obfuscated_names
+    check: dotnet_obfuscated_names
+    weight: 15
+    severity: medium
+    title: "Obfuscated .NET names"
+    description: "Most type and method names are unreadable (invisible or random characters): the code was obfuscated."
+    params: {min_names: 10, ratio: 0.5}
+
+  - id: dotnet_resource_payload
+    check: dotnet_resource_payload
+    weight: 10
+    severity: medium
+    title: "Encrypted or executable .NET resource"
+    description: "An embedded resource is large and near-random, or is itself a PE file: a packed payload."
+    params: {min_size: 16384, min_entropy: 7.5}
+
+  - id: dotnet_string_decryptor
+    check: dotnet_string_decryptor
+    weight: 15
+    severity: high
+    title: ".NET string decryption method"
+    description: >
+      A static method that takes a number and returns a string (or a generic value) is called from many places,
+      almost always with a constant: the strings are stored encrypted and decrypted one by one at runtime,
+      the scheme of protectors (ConfuserEx, .NET Reactor...) and of home-made crypters.
+    params: {}
+
+  - id: dotnet_stego_payload
+    check: dotnet_stego_image
+    weight: 40
+    severity: high
+    title: "Payload hidden in the pixels of an embedded image"
+    description: >
+      A real picture compresses well; these pixels are random noise (or contain a PE file): encrypted data stored
+      as an image in the resources, typical of the loaders of AgentTesla, Formbook, Remcos and similar.
+    params: {}
+
+  - id: dotnet_stego_decoder
+    check: dotnet_api
+    weight: 20
+    severity: high
+    title: ".NET loader rebuilds data from image pixels"
+    description: >
+      Reads its own resources, walks image pixels (GetPixel/LockBits + Color.R/G/B) and loads code in memory
+      or through reflection: the steganography decoder of a packed loader.
+    params: {all_of: [image_pixel_decoding], any_of: [in_memory_loading, reflection_invoke, native_function_pointer]}
+
+  # --- Cryptography (static detection, see rules/crypto.yaml) ---------------------------
+  - id: stream_cipher
+    check: crypto_algorithms
+    weight: 15
+    severity: high
+    title: "Stream cipher in the code (RC4, ChaCha20, Salsa20)"
+    description: >
+      Stream ciphers implemented directly in the program are the most common way malware
+      hides its configuration, strings and payloads.
+    params: {categories: [stream_cipher], min_confidence: medium, skip_library: true}
+
+  - id: payload_decryption
+    check: crypto_algorithms
+    weight: 20
+    severity: high
+    title: "Decryption of an embedded encrypted payload"
+    description: >
+      A decryption loop (XOR or RC4) reads a large high-entropy block stored in the file: a loader that
+      decrypts its next stage or its configuration at runtime.
+    params: {algorithms: ["Payload decryption"], min_confidence: medium}
+
+  - id: large_encrypted_blob
+    check: high_entropy_section
+    weight: 10
+    severity: medium
+    title: "Large encrypted data block"
+    description: "A data section of 32 KB or more with near-random content (entropy >= 7.9): an encrypted payload or configuration."
+    params: {threshold: 7.9, skip_executable: true, min_size: 32768}
+
+  - id: xor_decryption
+    check: crypto_algorithms
+    weight: 15
+    severity: high
+    title: "Custom XOR decryption routine"
+    description: >
+      A loop that XORs bytes and writes them back, called from many places (or copied inline many times):
+      the usual way infostealers and loaders decrypt their strings and configuration at runtime.
+    params: {algorithms: [XOR], min_confidence: medium}
+
+  - id: handmade_crypto
+    check: crypto_without_api
+    weight: 10
+    severity: medium
+    title: "Hand-rolled cryptography"
+    description: >
+      The program contains an encryption algorithm but does not use the Windows crypto APIs:
+      malware authors prefer their own, less visible implementation.
+    params:
+      categories: [stream_cipher, block_cipher, asymmetric]
+      min_confidence: medium
+      skip_library: true
+      apis: [CryptEncrypt, CryptDecrypt, CryptAcquireContextA, CryptAcquireContextW, BCryptEncrypt,
+             BCryptDecrypt, BCryptOpenAlgorithmProvider, NCryptEncrypt, NCryptOpenStorageProvider]
+
+  - id: embedded_rsa_key
+    check: crypto_algorithms
+    weight: 10
+    severity: medium
+    title: "Embedded RSA key"
+    description: "An RSA key inside the executable: common in ransomware (file keys are encrypted with the attacker's public key)."
+    params: {algorithms: [RSA], min_confidence: high}
+
+  - id: custom_base64
+    check: crypto_algorithms
+    weight: 15
+    severity: high
+    title: "Custom Base64 alphabet"
+    description: "A non-standard Base64 alphabet makes encoded data unreadable: almost always obfuscation."
+    params: {algorithms: ["Custom Base64"], min_confidence: medium}
+
+  - id: aplib_decompressor
+    check: crypto_algorithms
+    weight: 10
+    severity: medium
+    title: "aPLib decompressor"
+    description: >
+      aPLib compressed data or its decompression routine. Legitimate software rarely uses it today, while loaders
+      and shellcode often keep their next stage or configuration compressed with it.
+    params: {algorithms: [aPLib], min_confidence: high}
+
+  - id: ransomware_profile
+    check: crypto_and_apis
+    weight: 25
+    severity: high
+    title: "Ransomware profile"
+    description: >
+      Cryptography together with APIs to walk directories and rewrite or rename files, plus a ransom note or the
+      deletion of shadow copies and backups: the combination of ransomware (crypto and file access alone describe
+      any archiver).
+    params:
+      require_tags: [ransom, backup_delete]
+      categories: [stream_cipher, block_cipher, asymmetric]
+      min_confidence: medium
+      crypto_apis: [CryptEncrypt, BCryptEncrypt, NCryptEncrypt, CryptGenKey, BCryptGenerateSymmetricKey]
+      api_groups:
+        - [FindFirstFileW, FindFirstFileA, FindFirstFileExW, FindFirstFileExA, FindNextFileW, FindNextFileA]
+        - [MoveFileExW, MoveFileExA, MoveFileW, MoveFileA, SetFileInformationByHandle, DeleteFileW, DeleteFileA]
+        - [WriteFile, SetFilePointerEx, SetFilePointer]
