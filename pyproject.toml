@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "pelens"
-version = "0.20.0"
+version = "0.21.0"
 description = "Static PE file analyzer for malware triage: structure, strings, crypto detection and suspicion score"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -35,4 +35,4 @@ pelens-gui = "pelens.gui:main"
 include = ["pelens*"]
 
 [tool.setuptools.package-data]
-pelens = ["rules/*.yaml", "gui/fonts/*"]
+pelens = ["rules/*.yaml", "gui/fonts/*", "mcp_server/*"]

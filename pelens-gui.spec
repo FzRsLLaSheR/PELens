@@ -5,6 +5,8 @@ import re
 from PyInstaller.utils.hooks import collect_all, collect_data_files
 
 datas = collect_data_files("pelens") + collect_data_files("mscerts")
+# the MCP server is not run by PELens: it is copied to the AI machine (AI → Save MCP server for the AI machine)
+datas += [("pelens/mcp_server/pelens_mcp.py", "pelens/mcp_server"), ("pelens/mcp_server/README.md", "pelens/mcp_server")]
 binaries = []
 hiddenimports = ["dnfile", "yara"]
 d, b, h = collect_all("capstone")

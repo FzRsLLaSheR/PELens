@@ -44,6 +44,8 @@ PATHS = {
     "overview": '<path d="M4.5 16.5a7.5 7.5 0 1 1 15 0"/><path stroke="{ac}" d="M12 16.5l3.5-5"/>'
                 '<path d="M4.5 19.5h15"/>',
     "findings": '<path d="M5.5 21V4.5"/><path stroke="{ac}" d="M5.5 4.5h12l-2.5 4 2.5 4h-12"/>',
+    "ai_notes": '<path d="M5 4.5h14a1.5 1.5 0 0 1 1.5 1.5v9.5a1.5 1.5 0 0 1-1.5 1.5H10l-4.5 3.5V17H5a1.5 1.5 0 0 1-1.5-1.5V6A1.5 1.5 0 0 1 5 4.5z"/>'
+                '<path stroke="{ac}" d="M12 7.5l.9 2.1 2.1.9-2.1.9-.9 2.1-.9-2.1-2.1-.9 2.1-.9z"/>',
     "attack": '<circle cx="12" cy="12" r="8.5"/><circle cx="12" cy="12" r="4.5"/>'
               '<path stroke="{ac}" d="M12 12h.01"/>',
     "dotnet": '<rect x="3.5" y="5.5" width="17" height="13" rx="2"/><path stroke="{ac}" d="M9.5 15V9l5 6V9"/>'

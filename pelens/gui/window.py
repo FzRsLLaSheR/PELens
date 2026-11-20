@@ -6,7 +6,7 @@ import json
 import os
 import traceback
 
-from PySide6.QtCore import QSettings, QSize, Qt, QThread, Signal
+from PySide6.QtCore import QObject, QSettings, QSize, Qt, QThread, Signal
 from PySide6.QtGui import QAction, QBrush, QColor, QIcon, QKeySequence, QPainter, QPixmap
 from PySide6.QtWidgets import (QApplication, QCheckBox, QFileDialog, QHBoxLayout, QLabel, QMainWindow, QMessageBox,
                                QProgressBar, QPushButton, QSplitter, QStackedWidget, QToolBar,
@@ -58,6 +58,10 @@ def app_icon() -> QIcon:
         p.end()
         icon.addPixmap(pm)
     return icon
+
+
+class _NotesSignal(QObject):
+    changed = Signal(str)                            # sha256 of a file whose AI notes changed (any thread)
 
 
 class AnalyzeThread(QThread):
@@ -154,6 +158,15 @@ class MainWindow(QMainWindow):
         self.statusBar().addWidget(self.status, 1)
         self.statusBar().addPermanentWidget(self.busy)
 
+        self.bridge = None
+        self.bridge_label = QLabel("")
+        self.bridge_label.setObjectName("muted")
+        self.statusBar().addPermanentWidget(self.bridge_label)
+        from ..notes import STORE
+        self.notes_signal = _NotesSignal()
+        self.notes_signal.changed.connect(self._notes_changed)
+        STORE.listeners.append(self.notes_signal.changed.emit)
+
         self._build_actions()
         self._restore()
         pages.JUMP = self.jump
@@ -186,6 +199,10 @@ class MainWindow(QMainWindow):
         self.a_about = QAction("&About PELens", self, triggered=self.about)
         self.a_unmap = QAction("&Rebuild PE from memory dump…", self, shortcut=QKeySequence("Ctrl+U"),
                                triggered=self.show_unmapper)
+        self.a_ai_start = QAction("&Start AI bridge…", self, triggered=self.start_bridge)
+        self.a_ai_stop = QAction("S&top AI bridge", self, triggered=self.stop_bridge)
+        self.a_ai_cfg = QAction("&Configure the AI machine…", self, triggered=self.show_bridge_config)
+        self.a_ai_save = QAction("Save &MCP server for the AI machine…", self, triggered=self.save_mcp_server)
         self.code_box = QCheckBox("Code analysis")
         self.code_box.setToolTip("Disassemble the code: stack strings, RC4/XOR routines, loader techniques.\n"
                                  "Turn off for a faster, structure-only analysis.")
@@ -211,6 +228,9 @@ class MainWindow(QMainWindow):
         o.addAction(self.a_yara)
         u = self.menuBar().addMenu("&Unmapper")
         u.addAction(self.a_unmap)
+        ai = self.menuBar().addMenu("&AI")
+        for a in (self.a_ai_start, self.a_ai_stop, None, self.a_ai_cfg, self.a_ai_save):
+            ai.addSeparator() if a is None else ai.addAction(a)
         h = self.menuBar().addMenu("&Help")
         h.addAction(self.a_about)
 
@@ -259,6 +279,7 @@ class MainWindow(QMainWindow):
         self._refresh_recent()
 
     def closeEvent(self, ev):
+        self.stop_bridge()
         self.settings.setValue("geometry", self.saveGeometry())
         self.settings.setValue("code_analysis", self.code_box.isChecked())
         if self.thread and self.thread.isRunning():
@@ -307,6 +328,11 @@ class MainWindow(QMainWindow):
         self.a_compare.setEnabled(len(self.reports) >= 2)
         self.a_close_all.setEnabled(bool(self.reports))
         self.a_csv.setEnabled(bool(self.reports))
+        on = getattr(self, "bridge", None) is not None
+        if hasattr(self, "a_ai_stop"):
+            self.a_ai_start.setEnabled(not on)
+            self.a_ai_stop.setEnabled(on)
+            self.a_ai_cfg.setEnabled(on)
 
     # --- opening and analysis -----------------------------------------------------------------------
 
@@ -671,8 +697,13 @@ class MainWindow(QMainWindow):
     def export_json(self):
         out = self._save_name("json", "JSON (*.json)")
         if out:
+            rep = dict(self.reports[self._current_path()])
+            from ..notes import STORE
+            notes = STORE.get(rep["pe"]["hashes"]["sha256"])
+            if notes:
+                rep["ai_notes"] = notes
             with open(out, "w", encoding="utf-8") as f:
-                json.dump(self.reports[self._current_path()], f, indent=2, ensure_ascii=False)
+                json.dump(rep, f, indent=2, ensure_ascii=False)
             self.status.setText(f"Report saved to {out}")
 
     def export_html(self):
@@ -686,6 +717,85 @@ class MainWindow(QMainWindow):
         with open(out, "w", encoding="utf-8") as f:
             f.write(con.export_html(inline_styles=True))
         self.status.setText(f"HTML report saved to {out}")
+
+    # --- AI bridge ---------------------------------------------------------------------------------------
+
+    def start_bridge(self):
+        from ..bridge import Bridge, local_addresses
+        from .ai_page import BridgeDialog
+        if self.bridge is not None:
+            self.show_bridge_config()
+            return
+        dlg = BridgeDialog(self, self.settings, local_addresses())
+        if dlg.exec() != BridgeDialog.Accepted:
+            return
+        try:
+            b = Bridge(lambda: dict(self.reports), dlg.host.currentText().strip(), dlg.port.value(),
+                       dlg.token.text().strip(), dlg.client.text().strip())
+            b.start()
+        except OSError as e:
+            QMessageBox.warning(self, "PELens", f"Cannot start the AI bridge on {dlg.host.currentText()}:"
+                                                f"{dlg.port.value()}:\n{e}")
+            return
+        self.bridge = b
+        self.bridge_label.setText(f"AI bridge: {b.url}")
+        self._update_actions()
+        self.show_bridge_config()
+
+    def stop_bridge(self):
+        if self.bridge is not None:
+            self.bridge.stop()
+            self.bridge = None
+            self.bridge_label.setText("")
+            self._update_actions()
+
+    def show_bridge_config(self):
+        from .ai_page import ClientConfigDialog
+        if self.bridge is None:
+            QMessageBox.information(self, "PELens", "Start the AI bridge first (AI → Start AI bridge).")
+            return
+        ClientConfigDialog(self, self.bridge.url, self.bridge.token).exec()
+
+    def save_mcp_server(self):
+        """Writes the MCP server (and its configuration, when the bridge runs) for the AI machine."""
+        import shutil
+        from .ai_page import mcp_script_path
+        out = QFileDialog.getExistingDirectory(self, "Folder to copy to the AI machine")
+        if not out:
+            return
+        src = mcp_script_path()
+        shutil.copy2(src, os.path.join(out, "pelens_mcp.py"))
+        readme = os.path.join(os.path.dirname(src), "README.md")
+        if os.path.exists(readme):
+            shutil.copy2(readme, os.path.join(out, "README.md"))
+        if self.bridge is not None:
+            with open(os.path.join(out, "pelens-mcp.json"), "w", encoding="utf-8") as fh:
+                json.dump(self.bridge.client_config(), fh, indent=2)
+        self.status.setText(f"MCP server saved to {out}" + ("" if self.bridge else
+                                                             " (start the AI bridge to also write pelens-mcp.json)"))
+
+    def _notes_changed(self, sha: str):
+        """An AI note arrived (from the bridge thread) or was edited: refresh the AI Notes page of that file."""
+        cur = self.nav.currentItem()
+        for path, rep in self.reports.items():
+            if rep.get("pe", {}).get("hashes", {}).get("sha256") != sha:
+                continue
+            w = self.page_cache.pop((path, "ai_notes"), None)
+            showing = w is not None and self.stack.currentWidget() is w
+            for i in range(self.nav.topLevelItemCount()):
+                top = self.nav.topLevelItem(i)
+                if top.data(0, ROLE_PATH) != path:
+                    continue
+                for j in range(top.childCount()):
+                    ch = top.child(j)
+                    if ch.data(0, ROLE_PAGE) == "ai_notes":
+                        ch.setText(0, pages.page_label(rep, "ai_notes", None))
+            if showing:
+                self._on_nav(cur, None)
+            if w is not None:
+                self.stack.removeWidget(w)
+                w.deleteLater()
+            self.status.setText(f"AI notes of {rep['file']['name']} updated")
 
     def about(self):
         QMessageBox.about(self, "About PELens",

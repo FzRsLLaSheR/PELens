@@ -1184,6 +1184,11 @@ def raw_json(report: dict) -> QWidget:
     return _page(title("JSON report", "The full report (entropy points omitted here; File → Export JSON saves everything)."), ed)
 
 
+def _ai_notes(report: dict) -> QWidget:
+    from .ai_page import ai_notes
+    return ai_notes(report)
+
+
 # --- page registry ---------------------------------------------------------------------------
 
 def _count_label(report: dict, key: str) -> str:
@@ -1220,6 +1225,7 @@ PAGES: list[tuple[str, str | None, Callable[[dict], QWidget], Callable[[dict], b
     ("overview", "Overview", overview, lambda r: True),
     ("findings", None, findings, lambda r: True),
     ("attack", None, attack, lambda r: True),
+    ("ai_notes", None, _ai_notes, lambda r: True),
     ("dotnet", ".NET", dotnet, lambda r: bool(r.get("dotnet"))),
     ("crypto", None, crypto, lambda r: True),
     ("yara", None, yara, lambda r: True),
@@ -1236,6 +1242,9 @@ PAGES: list[tuple[str, str | None, Callable[[dict], QWidget], Callable[[dict], b
 
 
 def page_label(report: dict, key: str, label: str | None) -> str:
+    if key == "ai_notes":
+        from .ai_page import notes_label
+        return notes_label(report)
     return label or _count_label(report, key)
 
 

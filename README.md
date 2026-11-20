@@ -23,6 +23,8 @@
 - **Unmapper**: rebuilds a PE dumped from memory into a file that IDA and PELens read normally
 - **HxD-style hex view**, batch analysis of folders with CSV export, JSON and HTML reports
 - Rules and signatures in **editable YAML** files
+- **AI assistant (MCP)**: Claude Desktop or Claude Code, on another machine, validates and explains what PELens
+  found and writes its conclusions back as **AI notes**; your AI accounts and keys never touch the analysis VM
 
 | Sections and entropy | Hex view |
 |---|---|
@@ -50,6 +52,34 @@ pelens-gui sample.exe                 # graphical interface
 ```
 
 YARA rules: put them in a `yara` folder next to the exe, or use `--yara <folder>` / *Options → YARA rules folder*.
+
+## AI assistant (MCP)
+
+PELens can let an AI assistant work on the files open in it, **from another machine**: the analysis VM runs the
+**AI bridge** (AI → Start AI bridge), a read-only API protected by a token and listening only on the network shared
+with the AI machine; the AI machine runs Claude Desktop or Claude Code with the PELens MCP server. The assistant
+reads the score, findings, strings, imports, sections, crypto, YARA, .NET metadata, bytes and disassembly, says
+which findings it confirms and which look like false positives, explains what the sample does, and saves its
+conclusions in the **AI Notes** page of the file.
+
+```
+Analysis VM                                   AI machine (your AI account / API keys)
+┌───────────────────────────────┐             ┌──────────────────────────────────────┐
+│ PELens → AI → Start AI bridge │  Host-only  │ Claude Desktop / Claude Code         │
+│ read-only HTTP API + token    │◄────────────┤  └ pelens_mcp.py (MCP server)        │
+└───────────────────────────────┘   network   └──────────────────────────────────────┘
+```
+
+![PELens in the analysis VM, Claude Desktop in the AI VM](docs/screenshots/ai_notes.png)
+
+*Two separate VMs: PELens in the analysis VM (left) and Claude Desktop in the AI VM (right). Claude reads what
+PELens found on an njRAT sample, extracts its configuration, validates the findings one by one and writes the
+result into the AI Notes page.*
+
+**AI → Save MCP server for the AI machine** writes `pelens_mcp.py` and its configuration into a folder to copy to
+the AI machine; setup, tools and security notes are in [pelens/mcp_server/README.md](pelens/mcp_server/README.md).
+The only thing the assistant can write is a note: nothing is executed, uploaded or changed, and everything extracted
+from the sample is passed to it as untrusted data.
 
 ## From source
 
